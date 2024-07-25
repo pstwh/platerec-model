@@ -1,0 +1,16 @@
+build/
+dist/
+*.egg-info/
+*.egg
+__pycache__/
+*.so
+.ipynb_checkpoints/
+
+artifacts/
+data/
+dataset/
+notebooks/
+preprocessed/
+output/
+notebooks/
+*.zip
