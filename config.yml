@@ -1,0 +1,16 @@
+- name: br
+  paths: 
+    - data/br/real/*.jpg
+    - data/br/synth/*.jpg
+
+- name: us
+  paths: 
+    - data/us/*.jpg
+
+- name: ue
+  paths:
+    - data/ue/*.jpg
+
+- name: ru
+  paths:
+    - data/ru/*.png

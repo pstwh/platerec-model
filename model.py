@@ -160,23 +160,3 @@ class EncoderDecoder(nn.Module):
         idx = idx.tolist()
 
         return idx[0], probs_log
-
-    # @torch.no_grad()
-    # def generate(self, im, max_new_tokens=10, num_beam=3):
-    #     context = self.encoder(im)
-    #     sequences = [(torch.zeros((1, 1), dtype=torch.long, device=im.device), 0)]
-    #     for _ in range(max_new_tokens):
-    #         all_candidates = []
-    #         for seq, score in sequences:
-    #             logits = self.decoder(seq, context)
-    #             logits = logits[:, -1, :]
-    #             probs = F.softmax(logits, dim=-1)
-    #             topk_probs, topk_idx = torch.topk(probs, num_beam)
-    #             for i in range(num_beam):
-    #                 idx_next = topk_idx[:, i].unsqueeze(1)
-    #                 candidate = (torch.cat((seq, idx_next), dim=1), score + torch.log(topk_probs[:, i]))
-    #                 all_candidates.append(candidate)
-    #         sequences = sorted(all_candidates, key=lambda x: x[1], reverse=True)[:num_beam]
-    #         if any(seq[0, -1].item() == stoi[">"] for seq, _ in sequences):
-    #             break
-    #     return sequences[0][0]

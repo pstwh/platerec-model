@@ -1,5 +1,4 @@
 import argparse
-from pathlib import Path
 from random import shuffle
 
 import torch
@@ -7,10 +6,13 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from glob import glob
+import yaml
 
 from dataset import ImageTextDataset
 from model import EncoderDecoder
 from sam import SAM
+from config import ignore_index
 from transforms import transform, val_transform
 
 
@@ -18,11 +20,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train platerec model.")
 
     parser.add_argument(
-        "--dataset_paths",
+        "--config_path",
+        default="config.yml",
         type=str,
-        nargs="+",
-        required=True,
-        help="A list of directories to specify input data files.",
+        help="Path to the config file.",
     )
 
     parser.add_argument(
@@ -62,7 +63,7 @@ def train(model, dataloader, optimizer, scheduler, device):
         yp = yp.view(B * T, C)
         y = textsf.view(B * T)
 
-        loss = F.cross_entropy(yp, y, ignore_index=39)
+        loss = F.cross_entropy(yp, y, ignore_index=ignore_index)
         loss.backward()
         optimizer.first_step(zero_grad=True)
 
@@ -71,7 +72,7 @@ def train(model, dataloader, optimizer, scheduler, device):
         yp = yp.view(B * T, C)
         y = textsf.view(B * T)
 
-        loss = F.cross_entropy(yp, y, ignore_index=39)
+        loss = F.cross_entropy(yp, y, ignore_index=ignore_index)
         loss.backward()
         optimizer.second_step(zero_grad=True)
         scheduler.step()
@@ -86,6 +87,11 @@ def train(model, dataloader, optimizer, scheduler, device):
 def validate(model, val_dataloader, device):
     model.eval()
     val_losses = []
+    total_tokens = 0
+    correct_tokens = 0
+    total_words = 0
+    correct_words = 0
+
     with torch.no_grad():
         for images, texts, textsf in val_dataloader:
             images, texts, textsf = (
@@ -99,10 +105,35 @@ def validate(model, val_dataloader, device):
             yp = yp.view(B * T, C)
             y = textsf.view(B * T)
 
-            val_loss = F.cross_entropy(yp, y, ignore_index=39)
+            val_loss = F.cross_entropy(yp, y, ignore_index=ignore_index)
             val_losses.append(val_loss.item())
 
-    return torch.tensor(val_losses).mean().item()
+            predictions = torch.argmax(yp, dim=1)
+            mask = y != ignore_index
+            correct_tokens += (predictions[mask] == y[mask]).sum().item()
+            total_tokens += mask.sum().item()
+
+            predictions = predictions.view(B, T)
+            y = y.view(B, T)
+
+            word_correct = 0
+            for i in range(B):
+                valid_indices = y[i] != ignore_index
+
+                valid_predictions = predictions[i][valid_indices]
+                valid_targets = y[i][valid_indices]
+
+                if torch.equal(valid_predictions, valid_targets):
+                    word_correct += 1
+
+            correct_words += word_correct
+            total_words += B
+
+    avg_val_loss = torch.tensor(val_losses).mean().item()
+    token_accuracy = correct_tokens / total_tokens if total_tokens > 0 else 0
+    word_accuracy = correct_words / total_words if total_words > 0 else 0
+
+    return avg_val_loss, token_accuracy, word_accuracy
 
 
 def main():
@@ -111,8 +142,15 @@ def main():
     device = args.device
     num_epochs = args.num_epochs
 
-    data = list(map(lambda d: list(Path(d).glob("*.txt")), args.dataset_paths))
-    data = sum(data, [])
+    with open(args.config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    data = []
+    for c in config:
+        for p in c["paths"]:
+            files = glob(p)
+            files = list(map(lambda f: (c["name"], f), files))
+            data.extend(files)
     print(f"Total data: {len(data)}")
     shuffle(data)
 
@@ -136,11 +174,13 @@ def main():
     best_val_loss = float("inf")
     for epoch in range(num_epochs):
         train_loss = train(model, dataloader, optimizer, scheduler, device)
-        val_loss = validate(model, val_dataloader, device)
+        val_loss, token_acc, word_acc = validate(model, val_dataloader, device)
 
-        print(f"Epoch {epoch+1}/{num_epochs}")
+        print(f"Epoch {epoch + 1}/{num_epochs}")
         print(f"Train Loss: {train_loss:.4f}")
         print(f"Val Loss: {val_loss:.4f}")
+        print(f"Token Accuracy: {token_acc:.4%}")
+        print(f"Word Accuracy: {word_acc:.4%}")
 
         if val_loss < best_val_loss:
             torch.save(model.state_dict(), "best.pth")
