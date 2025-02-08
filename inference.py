@@ -1,9 +1,11 @@
-import torch
-from torchvision import transforms
-from PIL import Image
 import argparse
-from config import decode
+
+import torch
+from PIL import Image
+from torchvision import transforms
+
 from model import EncoderDecoder
+from tokenizer import Tokenizer
 
 IMAGE_EMB_SIZE = 96
 TEXT_EMB_SIZE = 64
@@ -27,11 +29,15 @@ def main():
         "--model_path", type=str, required=True, help="Path to the trained model"
     )
     parser.add_argument(
+        "--tokenizer_path", type=str, required=True, help="Path to the tokenizer"
+    )
+    parser.add_argument(
         "--image_path", type=str, required=True, help="Path to the input image"
     )
     args = parser.parse_args()
 
-    model = EncoderDecoder()
+    tokenizer = Tokenizer.load_from_json(args.tokenizer_path)
+    model = EncoderDecoder(tokenizer=tokenizer)
     model.load_state_dict(torch.load(args.model_path))
     model = model.eval().cuda()
 
@@ -39,7 +45,7 @@ def main():
         image_tensor = preprocess_image(args.image_path).cuda()
         with torch.no_grad():
             output_indices, token_confidence = model.generate(image_tensor)
-        predicted_text = decode(output_indices)
+        predicted_text = tokenizer.decode(output_indices)
 
         print(f"Predicted license plate: {predicted_text}, {token_confidence}")
 

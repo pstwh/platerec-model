@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import mobilenet_v2
-from config import block_size, vocab_size, stoi
 
 
 class CrossAttention(nn.Module):
@@ -94,10 +93,11 @@ class Decoder(nn.Module):
         num_heads=16,
         num_layers=3,
         dropout=0.1,
+        tokenizer=None,
     ):
         super().__init__()
-        self.token_embedding = nn.Embedding(vocab_size, emb_size)
-        self.position_embedding = nn.Embedding(block_size, emb_size)
+        self.token_embedding = nn.Embedding(tokenizer.vocab_size, emb_size)
+        self.position_embedding = nn.Embedding(tokenizer.block_size, emb_size)
         self.blocks = nn.ModuleList(
             [
                 DecoderBlock(emb_size, encoder_emb_size, num_heads, dropout)
@@ -105,7 +105,7 @@ class Decoder(nn.Module):
             ]
         )
         self.norm = nn.LayerNorm(emb_size)
-        self.linear = nn.Linear(emb_size, vocab_size)
+        self.linear = nn.Linear(emb_size, tokenizer.vocab_size)
 
     def forward(self, x, context):
         Bx, Tx = x.shape
@@ -129,12 +129,19 @@ class EncoderDecoder(nn.Module):
         num_heads=16,
         num_layers=4,
         dropout=0.1,
+        tokenizer=None,
     ):
         super().__init__()
         self.encoder = Encoder()
         self.decoder = Decoder(
-            emb_size, encoder_emb_size, num_heads, num_layers, dropout
+            emb_size,
+            encoder_emb_size,
+            num_heads,
+            num_layers,
+            dropout,
+            tokenizer=tokenizer,
         )
+        self.tokenizer = tokenizer
 
     def forward(self, x, im):
         context = self.encoder(im)
@@ -154,7 +161,7 @@ class EncoderDecoder(nn.Module):
             prob_next = probs.max(dim=-1).values.item()
             probs_log.append(prob_next)
             idx = torch.cat((idx, idx_next), dim=1)
-            if idx_next.item() == stoi[">"]:
+            if idx_next.item() == self.tokenizer.stoi[">"]:
                 break
 
         idx = idx.tolist()
