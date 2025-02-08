@@ -2,6 +2,8 @@
 ## platerec-model
 platerec-model is a model for recognizing text from images, specifically designed for license plate recognition. The project utilizes a neural network architecture with an encoder-decoder setup and uses SAM (Sharpness-Aware Minimization) for optimizing the model training process. It's really lightweight using only a mobilenet v2 for encoder and a decoder transformer (gpt) for decoder. It is used in the platerec project.
 
+The idea is to transform this training repository into a library that can be used easily.
+
 ### Table of Contents
 
 - [Installation](#installation)
@@ -30,13 +32,10 @@ platerec-model is a model for recognizing text from images, specifically designe
 To train the model, use the following command:
 
 ```bash
-python train.py --dataset_paths data
+python train.py --config_path config.yaml --model_checkpoint artifacts/trained_model.pth --device cuda --num_epochs 10
 ```
 
-**Parameters:**
-- `--dataset_paths`: A list of directories containing the input data files. The directory should contain the images and txt files, for example: 1.jpg and a 1.txt with the plate text, like: `AWD1E33` in plain text.
-
-Example:
+Dataset is expected to be in the following format:
 ```
 ├── 1.jpg
 ├── 1.txt
@@ -57,11 +56,12 @@ Example:
 To perform inference with the trained model, use the following command:
 
 ```bash
-python inference.py --model_path artifacts/trained_model.pth --image_path lp_cropped.jpg
+python inference.py --model_path artifacts/trained_model.pth --tokenizer_path artifacts/tokenizer.json --image_path test_image.jpg
 ```
 
 **Parameters:**
 - `--model_path`: Path to the trained model checkpoint (.pth file).
+- `--tokenizer_path`: Path to the tokenizer file (.json file).
 - `--image_path`: Path to the image file for which text recognition is to be performed.
 
 ### Model Architecture
@@ -70,5 +70,5 @@ The platerec-model employs an encoder-decoder architecture with cross-attention 
 
 - **Encoder:** Based on `mobilenet_v2` for feature extraction from images.
 - **Decoder:** Utilizes an embedding layer, position encoding, and multiple decoder blocks with self-attention and cross-attention layers.
-- **Loss Function:** Uses `cross_entropy` loss, with special handling for a specific index (`ignore_index=39`).
+- **Loss Function:** Uses `cross_entropy` loss, with special handling for a specific index (`ignore_index of ~ token`).
 
